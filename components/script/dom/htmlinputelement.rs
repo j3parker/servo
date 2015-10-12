@@ -631,7 +631,11 @@ impl VirtualMethods for HTMLInputElement {
             s.handle_event(event);
         }
 
-        if &*event.Type() == "click" && !event.DefaultPrevented() {
+        if event.DefaultPrevented() {
+            return;
+        }
+
+        if &*event.Type() == "click" {
             match self.input_type.get() {
                 InputType::InputRadio => self.update_checked_state(true, true),
                 _ => {}
@@ -644,9 +648,15 @@ impl VirtualMethods for HTMLInputElement {
 
             let doc = document_from_node(self);
             doc.r().request_focus(ElementCast::from_ref(self));
-        } else if &*event.Type() == "keydown" && !event.DefaultPrevented() &&
-            (self.input_type.get() == InputType::InputText ||
-             self.input_type.get() == InputType::InputPassword) {
+        }
+
+        if self.input_type.get() != InputType::InputText &&
+           self.input_type.get() != InputType::InputPassword {
+            return;
+        }
+
+        match &*event.Type().as_ref() {
+            "keydown" => {
                 let keyevent: Option<&KeyboardEvent> = KeyboardEventCast::to_ref(event);
                 keyevent.map(|keyevent| {
                     // This can't be inlined, as holding on to textinput.borrow_mut()
@@ -670,6 +680,9 @@ impl VirtualMethods for HTMLInputElement {
                         Nothing => (),
                     }
                 });
+            },
+            "focus" | "focusout" => self.force_relayout(),
+            _ => {}
         }
     }
 }
