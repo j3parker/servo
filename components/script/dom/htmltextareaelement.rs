@@ -327,38 +327,47 @@ impl VirtualMethods for HTMLTextAreaElement {
             s.handle_event(event);
         }
 
-        if &*event.Type() == "click" && !event.DefaultPrevented() {
-            //TODO: set the editing position for text inputs
+        if event.DefaultPrevented() {
+            return;
+        }
 
-            let doc = document_from_node(self);
-            doc.r().request_focus(ElementCast::from_ref(self));
-        } else if &*event.Type() == "keydown" && !event.DefaultPrevented() {
-            let keyevent: Option<&KeyboardEvent> = KeyboardEventCast::to_ref(event);
-            keyevent.map(|kevent| {
-                match self.textinput.borrow_mut().handle_keydown(kevent) {
-                    KeyReaction::TriggerDefaultAction => (),
-                    KeyReaction::DispatchInput => {
-                        self.value_changed.set(true);
+        match &*event.Type().as_ref() {
+            "click" => {
+                //TODO: set the editing position for text inputs
 
-                        if event.IsTrusted() {
-                            let window = window_from_node(self);
-                            let window = window.r();
-                            let chan = window.script_chan();
-                            let handler = Trusted::new(window.get_cx(), self, chan.clone());
-                            let dispatcher = ChangeEventRunnable {
-                                element: handler,
-                            };
-                            let _ = chan.send(CommonScriptMsg::RunnableMsg(InputEvent, box dispatcher));
+                let doc = document_from_node(self);
+                doc.r().request_focus(ElementCast::from_ref(self));
+            },
+            "keydown" => {
+                let keyevent: Option<&KeyboardEvent> = KeyboardEventCast::to_ref(event);
+                keyevent.map(|kevent| {
+                    match self.textinput.borrow_mut().handle_keydown(kevent) {
+                        KeyReaction::TriggerDefaultAction => (),
+                        KeyReaction::DispatchInput => {
+                            self.value_changed.set(true);
+
+                            if event.IsTrusted() {
+                                let window = window_from_node(self);
+                                let window = window.r();
+                                let chan = window.script_chan();
+                                let handler = Trusted::new(window.get_cx(), self, chan.clone());
+                                let dispatcher = ChangeEventRunnable {
+                                    element: handler,
+                                };
+                                let _ = chan.send(CommonScriptMsg::RunnableMsg(InputEvent, box dispatcher));
+                            }
+
+                            self.force_relayout();
                         }
-
-                        self.force_relayout();
+                        KeyReaction::RedrawSelection => {
+                            self.force_relayout();
+                        }
+                        KeyReaction::Nothing => (),
                     }
-                    KeyReaction::RedrawSelection => {
-                        self.force_relayout();
-                    }
-                    KeyReaction::Nothing => (),
-                }
-            });
+                });
+            },
+            "focus" | "focusout" => self.force_relayout(),
+            _ => {}
         }
     }
 }
