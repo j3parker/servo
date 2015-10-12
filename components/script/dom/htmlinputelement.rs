@@ -199,9 +199,16 @@ impl LayoutHTMLInputElementHelpers for LayoutJS<HTMLInputElement> {
     #[allow(unrooted_must_root)]
     #[allow(unsafe_code)]
     unsafe fn get_insertion_point_for_layout(self) -> Option<TextPoint> {
-        match (*self.unsafe_get()).input_type.get() {
-          InputType::InputText | InputType::InputPassword =>
-              Some((*self.unsafe_get()).textinput.borrow_for_layout().edit_point),
+        let node = self.unsafe_get();
+        match (*node).input_type.get() {
+          InputType::InputText | InputType::InputPassword => {
+              let elem = NodeCast::from_ref(&(*node).htmlelement);
+              if elem.get_focus_state() {
+                  Some((*node).textinput.borrow_for_layout().edit_point)
+              } else {
+                  None
+              }
+          },
           _ => None
         }
     }
